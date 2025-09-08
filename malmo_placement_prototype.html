@@ -1,0 +1,542 @@
+
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Malmö stad – Matchning & Placering (Low‑fi prototyp)</title>
+<style>
+  :root{
+    --bg:#f6f6f6;
+    --panel:#ffffff;
+    --ink:#1a1a1a;
+    --muted:#6b7280;
+    --accent:#0a0a0a; /* grayscale */
+    --focus:#111;
+    --border:#e5e7eb;
+    --ok:#16a34a; /* used with text + icon, not color alone */
+    --warn:#b45309;
+    --bad:#b91c1c;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    background:var(--bg);
+    color:var(--ink);
+    line-height:1.4;
+  }
+  a{color:inherit}
+  .app{
+    display:grid;
+    grid-template-rows:auto 1fr;
+    min-height:100dvh;
+  }
+  header{
+    background:#fff;
+    border-bottom:1px solid var(--border);
+  }
+  .wrap{max-width:1200px;margin:0 auto;padding:12px 16px}
+  .brand{display:flex;gap:12px;align-items:center}
+  .brand span{font-weight:700}
+  nav{
+    display:flex;gap:8px;flex-wrap:wrap;margin-top:8px
+  }
+  .tab{
+    appearance:none;
+    border:1px solid var(--border);
+    background:#fff;
+    padding:10px 12px;
+    border-radius:8px;
+    cursor:pointer;
+    font-weight:600;
+  }
+  .tab[aria-selected="true"]{
+    outline:2px solid var(--focus);
+    outline-offset:1px;
+  }
+  .skip{
+    position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;
+  }
+  .skip:focus{position:static;width:auto;height:auto;padding:8px;background:#fff;border:2px solid var(--focus)}
+  main{outline:none}
+  .grid{display:grid;gap:12px}
+  .grid.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:12px;
+  }
+  h1,h2,h3{margin:4px 0 8px 0}
+  h1{font-size:20px}
+  h2{font-size:18px}
+  h3{font-size:16px}
+  .kpi{display:flex;align-items:center;justify-content:space-between}
+  .kpi .val{font-size:28px;font-weight:800}
+  .list{display:grid;gap:8px}
+  .row{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:8px;padding:10px;border:1px dashed var(--border);border-radius:10px;background:#fafafa
+  }
+  .row strong{display:block}
+  .row .tags{display:flex;gap:6px;flex-wrap:wrap}
+  .tag{border:1px solid var(--border);border-radius:20px;padding:4px 8px;font-size:12px;background:#fff}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  button,.btn{
+    appearance:none;border:1px solid var(--border);background:#fff;padding:8px 10px;border-radius:10px;cursor:pointer
+  }
+  button:focus, .btn:focus{outline:3px solid var(--focus);outline-offset:1px}
+  .btn.primary{background:#111;color:#fff;border-color:#111}
+  .btn.ghost{background:transparent}
+  .filters{display:flex;gap:8px;flex-wrap:wrap}
+  input[type="search"], select{
+    padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:#fff;min-width:140px
+  }
+  .sr{position:absolute;left:-10000px;height:1px;width:1px;overflow:hidden}
+  .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+  /* Dialog */
+  dialog{border:none;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.12);width:min(560px,90vw)}
+  dialog::backdrop{background:rgba(0,0,0,.35)}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .help{font-size:14px;color:var(--muted)}
+  /* Table-ish */
+  .table{display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:6px;align-items:center}
+  .table > div{padding:8px;border-bottom:1px dashed var(--border)}
+  .table .head{font-weight:700;background:#fbfbfb;border-top:1px solid var(--border)}
+  /* Status dots are paired with text for non-color cues */
+  .dot{display:inline-block;width:10px;height:10px;border-radius:999px;margin-right:6px;background:#999;border:1px solid #666;vertical-align:middle}
+  .dot.ok{background:#16a34a}
+  .dot.warn{background:#b45309}
+  .dot.bad{background:#b91c1c}
+  /* Toast */
+  .toast{position:fixed;inset:auto 12px 12px auto;background:#111;color:#fff;padding:10px 12px;border-radius:10px;display:none}
+  .toast[data-show="true"]{display:block}
+  /* Progress bars (SVG-like) */
+  .bar{height:10px;background:#e5e7eb;border-radius:999px;overflow:hidden}
+  .bar > span{display:block;height:100%;background:#111}
+  /* Responsive tweaks */
+  @media (max-width: 900px){
+    .grid.cols-3{grid-template-columns:1fr}
+    .table{grid-template-columns:1.5fr 1fr 1fr 1fr auto}
+  }
+</style>
+</head>
+<body>
+<a href="#main" class="skip">Hoppa till innehåll</a>
+<div class="app" id="app">
+  <header class="wrap" role="banner">
+    <div class="brand" aria-label="Tjänst för matchning och placering">
+      <svg width="28" height="28" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect width="24" height="24" fill="#111" rx="6"/></svg>
+      <span>Malmö stad • Matchning & Placering</span>
+    </div>
+    <nav aria-label="Huvudnavigation" role="navigation">
+      <button class="tab" role="tab" aria-selected="true" aria-controls="view-dashboard" id="tab-dashboard">Dashboard</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="view-klient" id="tab-klient">Klient & matchning</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="view-bokning" id="tab-bokning">Bokning</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="view-statistik" id="tab-statistik">Statistik</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="view-hjalp" id="tab-hjalp">Stöd</button>
+    </nav>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap" role="main">
+    <!-- DASHBOARD -->
+    <section id="view-dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
+      <h1>Dashboard</h1>
+      <p class="help">Low‑fi överblick. Tal och boxar är klickbara för att simulera flödet.</p>
+      <div class="grid cols-3" style="margin-top:8px">
+        <div class="card kpi" aria-live="polite">
+          <div>
+            <strong>Inkomna förfrågningar</strong>
+            <div class="help">Akuta: 2 • Normala: 8</div>
+          </div>
+          <div class="val">10</div>
+        </div>
+        <div class="card kpi">
+          <div>
+            <strong>Lediga platser (egna + externa)</strong>
+            <div class="help">Egna: 14 • Externa: 6</div>
+          </div>
+          <div class="val">20</div>
+        </div>
+        <div class="card kpi">
+          <div>
+            <strong>Omplaceringar idag</strong>
+            <div class="help">Mål &lt; 2</div>
+          </div>
+          <div class="val">1</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="toolbar">
+          <h2>Förfrågningar</h2>
+          <div class="filters" role="group" aria-label="Filter">
+            <input type="search" id="q" placeholder="Sök klient/ärende…" aria-label="Sök"/>
+            <select id="f-typ" aria-label="Behov">
+              <option value="">Behov (alla)</option>
+              <option>Missbruk</option>
+              <option>Psykisk ohälsa</option>
+              <option>Våld i nära relation</option>
+              <option>Ungdom</option>
+            </select>
+            <select id="f-prio" aria-label="Prioritet">
+              <option value="">Prioritet (alla)</option>
+              <option>Akut</option>
+              <option>Normal</option>
+            </select>
+            <button class="btn" id="btn-apply">Tillämpa</button>
+          </div>
+        </div>
+
+        <div class="list" id="req-list" aria-live="polite">
+          <!-- rows inserted by JS -->
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="toolbar">
+          <h2>Boenden – kapacitet</h2>
+          <div class="help">Grå staplar visar beläggning. Text & ikon beskriver status.</div>
+        </div>
+        <div class="table" role="table" aria-label="Boenden och kapacitet">
+          <div class="head" role="columnheader">Boende</div>
+          <div class="head" role="columnheader">Stödtyp</div>
+          <div class="head" role="columnheader">Platser</div>
+          <div class="head" role="columnheader">Beläggning</div>
+          <div class="head" role="columnheader">Status</div>
+
+          <div role="row" class="contents">
+            <div>Solbacken</div><div>Missbruk</div>
+            <div>12</div>
+            <div><div class="bar" aria-label="Beläggning Solbacken 75%"><span style="width:75%"></span></div></div>
+            <div><span class="dot ok" aria-hidden="true"></span><span>Ledig kapacitet</span></div>
+          </div>
+
+          <div role="row" class="contents">
+            <div>Havsgatan</div><div>Psykisk ohälsa</div>
+            <div>8</div>
+            <div><div class="bar" aria-label="Beläggning Havsgatan 95%"><span style="width:95%"></span></div></div>
+            <div><span class="dot warn" aria-hidden="true"></span><span>Begränsat</span></div>
+          </div>
+
+          <div role="row" class="contents">
+            <div>Trygga Hem</div><div>Våld i nära relation</div>
+            <div>10</div>
+            <div><div class="bar" aria-label="Beläggning Trygga Hem 100%"><span style="width:100%"></span></div></div>
+            <div><span class="dot bad" aria-hidden="true"></span><span>Fullt</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- KLIENT & MATCHNING -->
+    <section id="view-klient" role="tabpanel" aria-labelledby="tab-klient" hidden>
+      <h1>Klient & matchning</h1>
+      <div class="card">
+        <div class="toolbar">
+          <h2>Klientkort</h2>
+          <div class="help">Exempelklient för att testa flödet</div>
+        </div>
+        <div class="grid">
+          <div><strong>Namn</strong><div>Alex Andersson</div></div>
+          <div><strong>Behov</strong><div>Missbruk, Låg tröskel, Nära centrum</div></div>
+          <div><strong>Prioritet</strong><div>Akut</div></div>
+          <div><strong>Önskat datum</strong><div>Idag</div></div>
+          <div><strong>Riskfaktorer</strong><div>Återfall senaste månaden</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="toolbar">
+          <h2>Matchningsförslag</h2>
+          <div class="help">Systemet föreslår och motiverar</div>
+        </div>
+        <div class="list" id="match-list">
+          <!-- JS injects -->
+        </div>
+      </div>
+    </section>
+
+    <!-- BOKNING -->
+    <section id="view-bokning" role="tabpanel" aria-labelledby="tab-bokning" hidden>
+      <h1>Bokning</h1>
+      <div class="card">
+        <div class="grid">
+          <div><strong>Klient</strong><div id="bk-klient">–</div></div>
+          <div><strong>Boende</strong><div id="bk-boende">–</div></div>
+          <div><strong>Inflytt</strong><div><input type="date" id="bk-datum" aria-label="Inflyttningsdatum"></div></div>
+        </div>
+        <div class="actions" style="margin-top:12px">
+          <button class="btn primary" id="btn-confirm">Bekräfta placering</button>
+          <button class="btn" id="btn-cancel">Avbryt</button>
+        </div>
+      </div>
+
+      <div class="card" id="confirm-card" style="margin-top:12px;display:none" aria-live="polite">
+        <h2>Placering bekräftad</h2>
+        <p>Klienten har fått plats. Checklista skapad.</p>
+        <ul>
+          <li>Skicka bekräftelse till boendet</li>
+          <li>Informera handläggare</li>
+          <li>Dokumentera i ärendesystem</li>
+        </ul>
+        <div class="actions">
+          <button class="btn" data-nav="view-dashboard">Till Dashboard</button>
+          <button class="btn" data-nav="view-statistik">Visa statistik</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATISTIK -->
+    <section id="view-statistik" role="tabpanel" aria-labelledby="tab-statistik" hidden>
+      <h1>Statistik & prognoser</h1>
+      <div class="grid cols-3">
+        <div class="card">
+          <h2>Beläggning (nu)</h2>
+          <div class="bar" aria-label="Beläggning nu 82%"><span style="width:82%"></span></div>
+          <p class="help">Mål &lt; 90% för att undvika akutlägen.</p>
+        </div>
+        <div class="card">
+          <h2>Prognos 30 dagar</h2>
+          <div class="bar" aria-label="Prognos 30 dagar 88%"><span style="width:88%"></span></div>
+          <p class="help">Trender baserat på inflöde/utflytt.</p>
+        </div>
+        <div class="card">
+          <h2>Kostnader (externa)</h2>
+          <div class="bar" aria-label="Kostnader externa 64% av total"><span style="width:64%"></span></div>
+          <p class="help">Mål: fler i egna boenden.</p>
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <h2>Behov per kategori (senaste 90 d)</h2>
+        <div class="table" role="table">
+          <div class="head">Kategori</div>
+          <div class="head">Andel</div>
+          <div class="head">Trend</div>
+          <div class="head">Kommentar</div>
+          <div class="head">Åtgärd</div>
+
+          <div>Missbruk</div><div>38%</div><div>↗</div><div>Ökat inflöde</div><div><button class="btn">Planera platser</button></div>
+          <div>Psykisk ohälsa</div><div>29%</div><div>→</div><div>Stabil nivå</div><div><button class="btn">Säkerställ stöd</button></div>
+          <div>Våld i nära relation</div><div>15%</div><div>↘</div><div>Minskande</div><div><button class="btn">Följ upp</button></div>
+          <div>Ungdom</div><div>18%</div><div>↗</div><div>Säsongseffekt</div><div><button class="btn">Samverkan</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STÖD & TRYGGHET -->
+    <section id="view-hjalp" role="tabpanel" aria-labelledby="tab-hjalp" hidden>
+      <h1>Stöd & trygghet i systemet</h1>
+      <div class="card">
+        <h2>Principer</h2>
+        <ul>
+          <li>Neutralt, icke-stigmatiserande språk</li>
+          <li>Beskrivande etiketter och ikon + text (inte färg ensam)</li>
+          <li>Fullt tangentbordsstöd och tydlig fokusmarkering</li>
+          <li>WCAG 2.1 AA: kontrast, struktur, rubriker, ARIA-landmarks</li>
+          <li>Undo‑känsla: lätt att ångra, trygga bekräftelser</li>
+        </ul>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <h2>Snabbkommandon</h2>
+        <p class="help">Testbara i prototypen:</p>
+        <ul>
+          <li><span class="mono">1</span> Dashboard, <span class="mono">2</span> Klient, <span class="mono">3</span> Bokning, <span class="mono">4</span> Statistik, <span class="mono">5</span> Stöd</li>
+          <li><span class="mono">/</span> Fokus till sök</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Booking dialog for quick confirm -->
+<dialog id="dlg-book" aria-labelledby="dlg-title">
+  <form method="dialog">
+    <div class="toolbar">
+      <h2 id="dlg-title">Bekräfta placering</h2>
+      <button class="btn" value="cancel" aria-label="Stäng">Stäng</button>
+    </div>
+    <p id="dlg-info">—</p>
+    <menu style="display:flex;gap:8px;justify-content:flex-end;margin:0;padding:0;margin-top:12px">
+      <button class="btn" value="cancel">Avbryt</button>
+      <button class="btn primary" value="default" id="dlg-confirm">Bekräfta</button>
+    </menu>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite">Placering bekräftad</div>
+
+<script>
+/* State (mock data) */
+const requests = [
+  {id:"K-1023", name:"Alex Andersson", need:"Missbruk", priority:"Akut", area:"Centrum", created:"Idag 09:20"},
+  {id:"K-1024", name:"Sara Nilsson", need:"Psykisk ohälsa", priority:"Normal", area:"Husie", created:"Igår 15:02"},
+  {id:"K-1025", name:"Mehmet Kaya", need:"Ungdom", priority:"Normal", area:"Fosie", created:"Idag 10:11"},
+  {id:"K-1026", name:"Maria Cruz", need:"Våld i nära relation", priority:"Akut", area:"Centrum", created:"Idag 08:45"},
+  {id:"K-1027", name:"John Doe", need:"Missbruk", priority:"Normal", area:"Oxie", created:"I förrgår"},
+  {id:"K-1028", name:"Li Zhang", need:"Psykisk ohälsa", priority:"Normal", area:"Hyllie", created:"Idag 11:05"},
+  {id:"K-1029", name:"Jonas Berg", need:"Ungdom", priority:"Normal", area:"Kirseberg", created:"Idag 09:10"},
+  {id:"K-1030", name:"Mia Persson", need:"Missbruk", priority:"Normal", area:"Rosengård", created:"Igår"},
+  {id:"K-1031", name:"Noah Ali", need:"Ungdom", priority:"Normal", area:"Västra Hamnen", created:"Idag 10:55"},
+  {id:"K-1032", name:"Eva S.", need:"Våld i nära relation", priority:"Normal", area:"Centrum", created:"Igår"}
+];
+
+const matches = [
+  {home:"Solbacken", why:"Låg tröskel, nära kollektivtrafik", distance:"1.2 km", capacity:"3 lediga", score:0.92, recommended:true},
+  {home:"Stadsgården", why:"Erfaret team för återfall", distance:"2.1 km", capacity:"1 ledig", score:0.86},
+  {home:"Havsgatan", why:"Begränsad kapacitet, men nära önskat område", distance:"0.9 km", capacity:"1 ledig", score:0.74}
+];
+
+let selectedClient = null;
+let selectedHome = null;
+
+/* Utility */
+function byId(id){return document.getElementById(id)}
+function navTo(viewId){
+  document.querySelectorAll('[role="tabpanel"]').forEach(sec=>{
+    sec.hidden = sec.id !== viewId;
+  });
+  document.querySelectorAll('.tab').forEach(btn=>{
+    btn.setAttribute('aria-selected', btn.getAttribute('aria-controls')===viewId ? "true" : "false")
+  });
+  // Move focus to main for SR friendliness
+  byId('main').focus();
+}
+function toast(msg, ms=2000){
+  const t=byId('toast'); t.textContent = msg; t.dataset.show = "true";
+  setTimeout(()=>{ t.dataset.show = "false"; }, ms);
+}
+
+/* Render requests with filters */
+function renderRequests(){
+  const q = byId('q').value.trim().toLowerCase();
+  const typ = byId('f-typ').value;
+  const prio = byId('f-prio').value;
+  const list = byId('req-list'); list.innerHTML = "";
+  requests
+    .filter(r => !q || (r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q)))
+    .filter(r => !typ || r.need===typ)
+    .filter(r => !prio || r.priority===prio)
+    .forEach(r => {
+      const row = document.createElement('div'); row.className="row";
+      row.innerHTML = `
+        <div>
+          <strong>${r.name}</strong>
+          <div class="help">${r.id} • ${r.need} • ${r.area} • ${r.created}</div>
+          <div class="tags">
+            <span class="tag">${r.priority}</span>
+            <span class="tag">${r.need}</span>
+            <span class="tag">${r.area}</span>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn" data-action="view" data-id="${r.id}">Visa</button>
+          <button class="btn primary" data-action="match" data-id="${r.id}">Matcha</button>
+        </div>
+      `;
+      list.appendChild(row);
+    });
+  if(!list.childElementCount){
+    const empty = document.createElement('p');
+    empty.textContent = "Inget att visa med valda filter.";
+    list.appendChild(empty);
+  }
+}
+
+/* Render matches */
+function renderMatches(){
+  const list = byId('match-list'); list.innerHTML = "";
+  matches.forEach(m => {
+    const row = document.createElement('div'); row.className="row";
+    const badge = m.recommended ? '<span class="tag">Rekommenderad</span>' : '';
+    row.innerHTML = `
+      <div>
+        <strong>${m.home}</strong>
+        <div class="help">${m.why}</div>
+        <div class="tags">
+          ${badge}
+          <span class="tag">Avstånd: ${m.distance}</span>
+          <span class="tag">Kapacitet: ${m.capacity}</span>
+          <span class="tag">Poäng: ${(m.score*100|0)}%</span>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" data-book="${m.home}">Boka</button>
+        <button class="btn ghost" data-more="${m.home}">Detaljer</button>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+/* Event wiring */
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click', e => navTo(btn.getAttribute('aria-controls')));
+});
+
+document.addEventListener('click', (e)=>{
+  const b = e.target.closest('button');
+  if(!b) return;
+  // Dashboard request actions
+  if(b.dataset.action === 'view'){
+    selectedClient = requests.find(x=>x.id===b.dataset.id) || null;
+    navTo('view-klient');
+  }
+  if(b.dataset.action === 'match'){
+    selectedClient = requests.find(x=>x.id===b.dataset.id) || null;
+    navTo('view-klient');
+    renderMatches();
+  }
+  // Match booking
+  if(b.dataset.book){
+    selectedHome = b.dataset.book;
+    const clientName = selectedClient ? selectedClient.name : '—';
+    const dlg = byId('dlg-book');
+    byId('dlg-info').textContent = `${clientName} → ${selectedHome}. Bekräfta placering?`;
+    dlg.showModal();
+    byId('dlg-confirm').onclick = () => {
+      dlg.close();
+      // fill booking view
+      byId('bk-klient').textContent = clientName;
+      byId('bk-boende').textContent = selectedHome;
+      byId('bk-datum').valueAsDate = new Date();
+      navTo('view-bokning');
+    };
+  }
+  if(b.dataset.more){
+    alert(`Low‑fi: detaljer om ${b.dataset.more}`);
+  }
+  if(b.dataset.nav){
+    navTo(b.dataset.nav);
+  }
+});
+
+byId('btn-apply').addEventListener('click', renderRequests);
+
+byId('btn-confirm').addEventListener('click', ()=>{
+  byId('confirm-card').style.display = 'block';
+  toast('Placering bekräftad');
+});
+
+byId('btn-cancel').addEventListener('click', ()=>{
+  selectedHome = null;
+  navTo('view-klient');
+});
+
+/* Keyboard shortcuts for speed under stress */
+document.addEventListener('keydown', (e)=>{
+  if (e.key === '/') { e.preventDefault(); byId('q').focus(); return; }
+  if (['1','2','3','4','5'].includes(e.key)){
+    const map={'1':'view-dashboard','2':'view-klient','3':'view-bokning','4':'view-statistik','5':'view-hjalp'};
+    navTo(map[e.key]); 
+  }
+});
+
+/* Initial render */
+renderRequests();
+renderMatches();
+</script>
+</body>
+</html>
